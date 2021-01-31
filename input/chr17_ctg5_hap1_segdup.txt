@@ -1,0 +1,13 @@
+bin	chrom	chromStart	chromEnd	name	score	strand	otherChrom	otherStart	otherEnd	otherSize	uid	posBasesHit	testResult	verdict	chits	ccov	alignfile	alignL	indelN	indelS	alignB	matchB	mismatchB	transitionsB	transversionsB	fracMatch	fracMatchIndel	jcK	k2K
+1	chr17_ctg5_hap1	496622	497660	chr17_GL000258v2_alt:508938	0	+	chr17_ctg5_hap1	1382048	1383086	1038	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	1038	1036	2	.	.	0.998	0.998	.	.
+1	chr17_ctg5_hap1	500278	503114	chr17_GL000258v2_alt:546791	0	+	chr17_ctg5_hap1	1385726	1388562	2836	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	2836	2805	31	.	.	0.989	0.989	.	.
+1	chr17_ctg5_hap1	500278	506024	chr17_GL000258v2_alt:550143	0	+	chr17_ctg5_hap1	1246119	1251865	5746	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	5746	5717	29	.	.	0.995	0.995	.	.
+1	chr17_ctg5_hap1	503107	504925	chr17_GL000258v2_alt:578883	0	+	chr17_ctg5_hap1	1388554	1390372	1818	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	1818	1785	33	.	.	0.982	0.982	.	.
+1	chr17_ctg5_hap1	510930	515385	chr17_GL000258v2_alt:553590	0	+	chr17_ctg5_hap1	1252339	1256794	4455	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	4455	4424	31	.	.	0.993	0.993	.	.
+1	chr17_ctg5_hap1	578614	652495	chr17_GL000258v2_alt:494630	0	+	chr17_ctg5_hap1	1307210	1381024	73814	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	73814	73593	221	.	.	0.997	0.997	.	.
+1	chr17_ctg5_hap1	1382048	1383086	chr17_GL000258v2_alt:1201550	0	+	chr17_ctg5_hap1	496622	497660	1038	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	1038	1036	2	.	.	0.998	0.998	.	.
+1	chr17_ctg5_hap1	1385726	1388562	chr17_GL000258v2_alt:1325352	0	+	chr17_ctg5_hap1	500278	503114	2836	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	2836	2805	31	.	.	0.989	0.989	.	.
+1	chr17_ctg5_hap1	1246119	1251865	chr17_GL000258v2_alt:1329165	0	+	chr17_ctg5_hap1	500278	506024	5746	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	5746	5717	29	.	.	0.995	0.995	.	.
+1	chr17_ctg5_hap1	1388554	1390372	chr17_GL000258v2_alt:1361335	0	+	chr17_ctg5_hap1	503107	504925	1818	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	1818	1785	33	.	.	0.982	0.982	.	.
+1	chr17_ctg5_hap1	1252339	1256794	chr17_GL000258v2_alt:1332586	0	+	chr17_ctg5_hap1	510930	515385	4455	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	4455	4424	31	.	.	0.993	0.993	.	.
+1	chr17_ctg5_hap1	1307210	1381024	chr17_GL000258v2_alt:1433940	0	+	chr17_ctg5_hap1	578614	652495	73881	.	1000	N/A	N/A	N/A	N/A	align_both/0014/both0074763	.	.	.	73881	73659	222	.	.	0.997	0.997	.	.
