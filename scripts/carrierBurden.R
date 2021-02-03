@@ -22,6 +22,19 @@ Recurrentdel.hg19$start[idx.17q23.hg19] <- 43685164
 Recurrentdel.hg19$end[idx.17q23.hg19] <- 44287367
 Recurrentdel.hg19$seqnames[idx.17q23.hg19] <-"17"
 
+Recurrentdel.w.freq <- Recurrentdel %>% filter(freq>0)
+Recurrentdel.w.freqCMA <- Recurrentdel %>% filter(freqCMA>0)
+gr.Recurrentdel.w.freq <-  with(Recurrentdel.w.freq, GRanges(seqnames=seqnames, IRanges(start = start, end= end )))
+gr.Recurrentdel.w.freqCMA <-  with(Recurrentdel.w.freqCMA, GRanges(seqnames=seqnames, IRanges(start = start, end= end )))
+## Mb size for total unique intervals with considerable population frequency
+sum(width(reduce(gr.Recurrentdel.w.freq)))/1e6
+sum(width(reduce(gr.Recurrentdel.w.freqCMA)))/1e6
+## Number of genes involved
+do.call(c,lapply(Recurrentdel.w.freq$allgenes, function(x){strsplit(x, ",")[[1]]})) %>% unique %>% length()
+do.call(c,lapply(Recurrentdel.w.freqCMA$allgenes, function(x){strsplit(x, ",")[[1]]})) %>% unique %>% length()
+## aggregate population allele frequency
+sum(Recurrentdel.w.freq$freq)/1e6
+
 gr.recurrentdel<- with(Recurrentdel, GRanges(seqnames = seqnames, IRanges(start = start, end = end), regionname = name))
 gr.recurrentdel.hg19 <- with(Recurrentdel.hg19, GRanges(seqnames = seqnames, IRanges(start=start, end=end)))
 
@@ -245,7 +258,6 @@ gnomadSV.af.by.region.exclude.NAHR.singlegene <- gnomadSV.af.by.region.exclude.N
 gnomadSV.af.by.region.exclude.NAHR.clean <- bind_rows(gnomadSV.af.by.region.exclude.NAHR.singlegene, gnomadSV.af.by.region.exclude.NAHR.multigene.sep)
 
 ## add NAHR large CNV back
-Recurrentdel.w.freq <- Recurrentdel %>% filter(freq>0)
 gnomadSV.af.by.region <- rbind(gnomadSV.af.by.region.exclude.NAHR.clean, 
                                do.call(rbind, lapply(1:nrow(Recurrentdel.w.freq), function(x){
                                  genenames.inCNV <- strsplit(Recurrentdel.w.freq$biallelic[x], ",")[[1]]
@@ -393,6 +405,9 @@ clinvar.gnomadsv.recessive <- rbind(clinvar.varsum.recessive.gnomad.reformat,
 Recurrentdel.highAF <- Recurrentdel %>% filter(seqnames !="X" & freq>0) %>% arrange(desc(freq), desc(freqCMA))
 NAHR.ARgenes <- do.call(c, lapply(1:nrow(Recurrentdel.highAF), function(x){
   strsplit(Recurrentdel.highAF$biallelic[x], ",")[[1]]})) %>% unique %>% setdiff(., NA)
+
+## all alleles for recessive genes within NAHR regions
+clinvar.gnomadsv.recessive.NAHR <- clinvar.gnomadsv.recessive %>%  filter(GeneSymbol %in% NAHR.ARgenes)
 
 metrics.by.population <- function(AFname)
 {
