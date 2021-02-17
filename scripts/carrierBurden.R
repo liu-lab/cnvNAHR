@@ -5,10 +5,10 @@ library(GenomicRanges)
 library(biomaRt)
 library(VariantAnnotation)
 library(rtracklayer)
+library(parallel)
 
 ## download gnomad SV from website
 gnomadSV <- readVcf("./input.bigfiles/gnomad_v2.1_sv.sites.vcf.gz")
-# system('tabix -p vcf ./input.bigfiles/gnomad_v2.1_sv.sites.vcf.gz')
 
 Recurrentdel <- read_tsv("./output/NAHR_GRCh38.withgenes.tsv")  %>% mutate(seqnames=gsub("chr", "",seqnames))
 ## genes in the 17_GL000258v2_alt haplotype do not map properly. Therefore the region needs to be converted to the chromosome 17 equivilant. 
@@ -29,16 +29,44 @@ gr.Recurrentdel.w.freqCMA <-  with(Recurrentdel.w.freqCMA, GRanges(seqnames=seqn
 ## Mb size for total unique intervals with considerable population frequency
 sum(width(reduce(gr.Recurrentdel.w.freq)))/1e6
 sum(width(reduce(gr.Recurrentdel.w.freqCMA)))/1e6
-## Number of genes involved
-do.call(c,lapply(Recurrentdel.w.freq$allgenes, function(x){strsplit(x, ",")[[1]]})) %>% unique %>% length()
-do.call(c,lapply(Recurrentdel.w.freqCMA$allgenes, function(x){strsplit(x, ",")[[1]]})) %>% unique %>% length()
+## Number of genes involved. Check distribution of recessive/nonrecessive gene within/without NAHR regions
+Biallelic.gene.omim.ddd.clingen <- read_lines("./output/biallelicgenes.txt")
+MonoAndBi.gene.omim.ddd.clingen <- read_lines("./output/biallelicmonoallelicgenes.txt")
+
+statistics.NAHR.genes <- function(Recurrentdel.w.freq)
+{
+  genes.NAHR.prev.allgenes <- do.call(c,lapply(Recurrentdel.w.freq$allgenes, function(x){strsplit(x, ",")[[1]]})) %>% unique
+  genes.NAHR.prev.allcodinggenes <- do.call(c,lapply(Recurrentdel.w.freq$allgenescoding, function(x){strsplit(x, ",")[[1]]})) %>% unique
+  genes.NAHR.prev.biallelic <- do.call(c,lapply(Recurrentdel.w.freq$biallelic, function(x){strsplit(x, ",")[[1]]})) %>% unique
+  genes.NAHR.prev.monoandbiallelic <- do.call(c,lapply(Recurrentdel.w.freq$omim_ddd, function(x){strsplit(x, ",")[[1]]})) %>% unique 
+  num.genes.NAHR.prev.unknown.nonbiallelic <- setdiff(genes.NAHR.prev.allgenes, genes.NAHR.prev.biallelic) %>% length
+  num.genes.NAHR.prev.unknowncoding.nonbiallelic <- setdiff(genes.NAHR.prev.allcodinggenes, genes.NAHR.prev.biallelic) %>% length
+  num.genes.NAHR.prev.biallelic <- genes.NAHR.prev.biallelic %>% length
+  num.genes.NAHR.prev.nonbiallelic <- setdiff(genes.NAHR.prev.monoandbiallelic, genes.NAHR.prev.biallelic) %>% length
+  num.Biallelic.gene.omim.ddd.clingen.nonNAHR <- (Biallelic.gene.omim.ddd.clingen %>% length) - num.genes.NAHR.prev.biallelic
+  num.nonBiallelic.gene.omim.ddd.clingen.nonNAHR <- (setdiff(MonoAndBi.gene.omim.ddd.clingen, Biallelic.gene.omim.ddd.clingen) %>% length) - num.genes.NAHR.prev.nonbiallelic
+  df.NAHRrecessive <- data.frame(Recessive=c(NAHR= num.genes.NAHR.prev.biallelic, nonNAHR= num.Biallelic.gene.omim.ddd.clingen.nonNAHR), 
+                                 nonRecerssive= c(NAHR= num.genes.NAHR.prev.nonbiallelic, nonNAHR= num.nonBiallelic.gene.omim.ddd.clingen.nonNAHR))
+  fisher.NAHRrecessive <- fisher.test(df.NAHRrecessive)
+  print("Number of biallelic gene is ")
+  print(num.genes.NAHR.prev.biallelic)
+  print("Number of other genes is ")
+  print(num.genes.NAHR.prev.unknown.nonbiallelic)
+  print("Number of other coding genes is ")
+  print(num.genes.NAHR.prev.unknowncoding.nonbiallelic)
+  print(df.NAHRrecessive)
+  print(fisher.NAHRrecessive)
+  
+}
+
+statistics.NAHR.genes(Recurrentdel.w.freq)
+statistics.NAHR.genes(Recurrentdel.w.freqCMA)
 ## aggregate population allele frequency
 sum(Recurrentdel.w.freq$freq)/1e6
 
 gr.recurrentdel<- with(Recurrentdel, GRanges(seqnames = seqnames, IRanges(start = start, end = end), regionname = name))
 gr.recurrentdel.hg19 <- with(Recurrentdel.hg19, GRanges(seqnames = seqnames, IRanges(start=start, end=end)))
 
-Biallelic.gene.omim.ddd.clingen <- read_lines("./output/biallelicgenes.txt")
 
 ## gnomad sv is in GRCh37. So ranges for genes need to be in GRCh37. 
 grch37 = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice", dataset="hsapiens_gene_ensembl")
@@ -132,7 +160,7 @@ gr.gene.recessive.grch37.gnomadSV.LOF[unique(queryHits(hits))]
 gr.gene.recessive.grch37.gnomadSV.LOF1 <- gr.gene.recessive.grch37.gnomadSV.LOF[-unique(queryHits(hits))]
 
 ## next, need to further filter these SVs based on their consequence to the genes. 
-## first, annotation is down with VEP
+## first, annotation is done with VEP
 bed.gene.recessive.grch37.gnomadSV.LOF1 <- data.frame(seqnames=seqnames(gr.gene.recessive.grch37.gnomadSV.LOF1),
                                                       starts=start(gr.gene.recessive.grch37.gnomadSV.LOF1)+1,
                                                       ends=end(gr.gene.recessive.grch37.gnomadSV.LOF1),
@@ -269,7 +297,7 @@ gnomadSV.af.by.region <- rbind(gnomadSV.af.by.region.exclude.NAHR.clean,
                                               EAS_AF=Recurrentdel.w.freq$freq[x]/1e6, 
                                               EUR_AF=Recurrentdel.w.freq$freq[x]/1e6, 
                                               GeneSymbol=genenames.inCNV, 
-                                              CSRA= Recurrentdel.w.freq$name[x])
+                                              CSRA= paste0("cnv_",Recurrentdel.w.freq$name[x]))
                                  }
                                })) 
                               )    
@@ -291,7 +319,7 @@ gnomadSV.af.by.region <- rbind(gnomadSV.af.by.region.exclude.NAHR.clean,
 # gnomadSV.af.by.gene.exclude.NAHR.rename <- gnomadSV.af.by.gene.exclude.NAHR %>% mutate(AFsum.exc.NAHR=AFsum) %>% dplyr::select(genes, AFsum.exc.NAHR)
 
 
-## clinvar, everything needs to be done in GRCh38
+## gnomad expected LOF and ClinVar, everything needs to be done in GRCh38
 
 ensembl <- useEnsembl(biomart="ENSEMBL_MART_ENSEMBL", 
                       dataset="hsapiens_gene_ensembl",
@@ -301,9 +329,164 @@ gene.know.AR.bm <- getBM(attributes=c("ensembl_gene_id","chromosome_name","start
                                      "hgnc_symbol", "hgnc_id"), 
                         filter="hgnc_id", values=Biallelic.gene.omim.ddd.clingen, mart=ensembl) %>% filter(chromosome_name %in% c(1:22, "X", "Y"))
 
-gr.genes.biallelic <- with(gene.know.AR.bm, GRanges(seqnames = chromosome_name, IRanges(start= start_position, end = end_position)))
+gr.genes.biallelic <- with(gene.know.AR.bm, GRanges(seqnames = chromosome_name, IRanges(start= start_position, end = end_position), hgnc_symbol=hgnc_symbol))
 
-## there are three input files for clinvar
+## bed files are generated to intersect with downloaded gnomAD data 
+write_tsv(data.frame(chrom=paste0("chr", seqnames(reduce(gr.genes.biallelic))), 
+              start=start(reduce(gr.genes.biallelic))-1, 
+              end=end(reduce(gr.genes.biallelic))), "./output/biallelicgenes.bed", col_names = F)
+
+write_tsv(data.frame(chrom=paste0("chr", seqnames(reduce(intersect(gr.genes.biallelic, gr.Recurrentdel.w.freqCMA)))), 
+                     start=start(reduce(intersect(gr.Recurrentdel.w.freqCMA, gr.genes.biallelic)))-1, 
+                     end=end(reduce(intersect(gr.Recurrentdel.w.freqCMA, gr.genes.biallelic)))), "./output/prevNAHRbiallelicgenes.bed", col_names = F)
+
+## carve out from gnomAD the AR gene of interest regions
+header.gonmad.length <- system("zcat ./input.bigfiles/gnomad.genomes.v3.1.sites.chr22.vcf.bgz | grep ^# | wc -l")
+# 942
+system("zcat ./input.bigfiles/gnomad.genomes.v3.1.sites.chr22.vcf.bgz | head -n 942 > ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr1.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr2.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr3.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr5.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr7.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr8.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr10.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr13.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr15.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr16.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr17.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.chr22.vcf.bgz -b ./output/prevNAHRbiallelicgenes.bed >> ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf")
+system("grep '^#' ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf > ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.HC.vcf")
+system("grep '|HC|||' ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.vcf > ./input.bigfiles/gnomad.genomes.v3.1.sites.prevNAHRrecessive.HC.vcf")
+
+system("cp ./input.bigfiles/gnomad.genomes.v3.1.sites.header.vcf ./input.bigfiles/gnomad.genomes.v3.1.sites.HC.vcf ")
+for(i in c(1:22, "X", "Y"))
+{
+  system(paste0("zgrep '|HC|||' ./input.bigfiles/gnomad.genomes.v3.1.sites.chr", i, ".vcf.bgz >> ./input.bigfiles/gnomad.genomes.v3.1.sites.HC.vcf"))
+}
+
+system(" bedtools intersect -a ./input.bigfiles/gnomad.genomes.v3.1.sites.HC.vcf -b ./output/biallelicgenes.bed > ./input.bigfiles/gnomad.genomes.v3.1.sites.HC.rec.vcf")
+
+
+## loading carved out gnomAD data
+gnomadv3.1.recessive.HCraw = readVcf("./input.bigfiles/gnomad.genomes.v3.1.sites.v3.1.site.header.HCrec.vcf", genome = "GRCh38")
+
+
+vep.gnomadv3.1.recessive.HCraw <- do.call(c, mclapply(1:length(gnomadv3.1.recessive.HCraw), function(x)
+{
+  vepparse <- unlist(info(gnomadv3.1.recessive.HCraw[x])$vep)
+  idx.vepparse <- grep("\\|", vepparse)
+  
+  vepparse.edited <-if(length(vepparse) > length(idx.vepparse))
+  {
+    if(length(vepparse)==1 & length(idx.vepparse)==1)
+    {vepparse}  else if (length(vepparse)!=1 & length(idx.vepparse)==1)
+    {paste(vepparse, collapse = ",")} else if (length(vepparse)==max(idx.vepparse))
+    {
+      c(sapply(1:(length(idx.vepparse)-1), function(z)
+      {
+        if(idx.vepparse[z+1]-idx.vepparse[z]==1)
+        {vepparse[idx.vepparse[z]]} else 
+        {
+          paste(vepparse[idx.vepparse[z]:(idx.vepparse[z+1]-1)], collapse=",")
+        }
+      }), vepparse[max(idx.vepparse)])    
+    } else 
+    {
+      c(sapply(1:(length(idx.vepparse)-1), function(z)
+      {
+        if(idx.vepparse[z+1]-idx.vepparse[z]==1)
+        {vepparse[idx.vepparse[z]]} else 
+        {
+          paste(vepparse[idx.vepparse[z]:(idx.vepparse[z+1]-1)], collapse=",")
+        }
+      }), paste(vepparse[max(idx.vepparse):length(vepparse)], collapse=","))
+    }
+    
+  } else {vepparse}
+  
+  
+  df.vepparse.edited <- as.data.frame(do.call(rbind, lapply(vepparse.edited, function(z)
+  {
+    strsplit(z, "\\|")[[1]]
+  })), stringsAsFactors = F)
+  
+  df.vepparse.edited.selTx <- df.vepparse.edited[df.vepparse.edited$V24 %in% Biallelic.gene.omim.ddd.clingen &
+                                                   df.vepparse.edited$V8=="protein_coding" &
+                                                   startsWith(df.vepparse.edited$V7, "ENS"), ]
+  selgene <- df.vepparse.edited.selTx$V24 %>% unique %>% head(1)
+  
+  df.vepparse.edited.selTx <- df.vepparse.edited.selTx[df.vepparse.edited.selTx$V24==selgene, ]
+  
+  print(paste0("x is ", x, ". "))
+  
+  if(nrow(df.vepparse.edited.selTx)==0)
+  {FALSE} else
+  {
+    includeornot <- !any(c(any(df.vepparse.edited.selTx$V42!="HC"), 
+                           any(df.vepparse.edited.selTx$V43!=""), 
+                           any(df.vepparse.edited.selTx$V44!=""), 
+                           any(grepl("50_BP_RULE:FAIL", df.vepparse.edited.selTx$V45))))
+    
+    
+    print(paste(df.vepparse.edited.selTx$V42, collapse = "_"))
+    print(paste(df.vepparse.edited.selTx$V43, collapse = "_"))
+    print(paste(df.vepparse.edited.selTx$V44, collapse = "_"))
+    print(paste(df.vepparse.edited.selTx$V45, collapse = "_"))
+    print(includeornot)
+    
+    includeornot
+    
+  }
+  
+  
+}, mc.cores = 10))
+
+
+## excluding variants with flags
+lcr.gnomadv3.1.recessive.HCraw <- info(gnomadv3.1.recessive.HCraw)$lcr
+PASS.gnomadv3.1.recessive.HCraw <- elementMetadata(gnomadv3.1.recessive.HCraw)$FILTER
+
+gnomadv3.1.recessive.HC <- gnomadv3.1.recessive.HCraw[!lcr.gnomadv3.1.recessive.HCraw & 
+                                                      PASS.gnomadv3.1.recessive.HCraw=="PASS" &
+                                                      vep.gnomadv3.1.recessive.HCraw &
+                                                      info(gnomadv3.1.recessive.HC)$QUALapprox<1e5 & 
+                                                      info(gnomadv3.1.recessive.HC)$AN>7.5e4 &
+                                                      info(gnomadv3.1.recessive.HC)$AF<0.01]
+
+## cleaned up high confidence high quality LOF variants
+writeVcf(gnomadv3.1.recessive.HC, "./input.bigfiles/gnomadv3.1.prevNAHRrecessive.HCnoflag.vcf")
+
+## make a dataframe with CSRA and AFs. This includes all the expected LOF variants from gnomAD. 
+seqlevelsStyle(rowRanges(gnomadv3.1.recessive.HC))  <- "NCBI"
+
+AF.gnomadv3.1.recessive.HC <- info(gnomadv3.1.recessive.HC)$AF %>% unlist 
+AFafr.gnomadv3.1.recessive.HC <- info(gnomadv3.1.recessive.HC)$'AF-afr' %>% unlist 
+AFamr.gnomadv3.1.recessive.HC <- info(gnomadv3.1.recessive.HC)$'AF-amr' %>% unlist 
+AFeas.gnomadv3.1.recessive.HC <- info(gnomadv3.1.recessive.HC)$'AF-eas' %>% unlist 
+AFnfe.gnomadv3.1.recessive.HC <- info(gnomadv3.1.recessive.HC)$'AF-nfe' %>% unlist 
+CSRA.gnomadv3.1.recessive.HC <- paste(seqnames(rowRanges(gnomadv3.1.recessive.HC)), 
+                                                start(rowRanges(gnomadv3.1.recessive.HC)), 
+                                                elementMetadata(gnomadv3.1.recessive.HC)$REF, 
+                                                as.character(unlist(elementMetadata(gnomadv3.1.recessive.HC)$ALT)), 
+                                                sep="_")
+
+GeneSymbol.gnomadv3.1.recessive.HC <- sapply(1:nrow(gnomadv3.1.recessive.HC), function(x)
+  {
+  genesymbol = subsetByOverlaps(gr.genes.biallelic, rowRanges(gnomadv3.1.recessive.HC)[x])$hgnc_symbol[1]
+  if(identical(genesymbol, numeric(0))) {"NA"} else {genesymbol}
+})
+
+csra.gnomad.expLOF <- data.frame(GeneSymbol= GeneSymbol.gnomadv3.1.recessive.HC, 
+                                 CSRA= CSRA.gnomadv3.1.recessive.HC, 
+                          AF=AF.gnomadv3.1.recessive.HC, 
+                          AFR_AF=AFafr.gnomadv3.1.recessive.HC, 
+                          AMR_AF=AFamr.gnomadv3.1.recessive.HC, 
+                          EAS_AF=AFeas.gnomadv3.1.recessive.HC, 
+                          EUR_AF=AFnfe.gnomadv3.1.recessive.HC,
+                          stringsAsFactors = F)
+
+## Next, extract P and LP variants from ClinVar. There are three input files for ClinVar
 ## 1. vcf is used to obtain AF
 ## 2. submission_summary is used to obtain curation text to facilitate filtering
 ## 3. variant_summary is used as the main file 
@@ -393,13 +576,24 @@ low.confidence.exclude <- with(clinvar.varsum.recessive.gnomad,
 clinvar.varsum.recessive.gnomad <- clinvar.varsum.recessive.gnomad[!low.confidence.exclude,]
 
 clinvar.varsum.recessive.gnomad.reformat <- clinvar.varsum.recessive.gnomad %>% dplyr::select(GeneSymbol, CSRA, AF, AFR_AF, AMR_AF, EAS_AF, EUR_AF) %>% unique
-clinvar.varsum.recessive.gnomad.reformat %>% nrow
+## the two PRRT2 variants in the current annotation do not have accurate frequencies. Removing them and adding back the entires with edited frequencies
+clinvar.varsum.recessive.gnomad.reformat <- clinvar.varsum.recessive.gnomad.reformat %>% filter(!CSRA %in% c("16_29813694_GC_G", "16_29813694_G_GC"))
+## adding more variants curated to be P but not currently in. 
+clinvar.varsum.recessive.gnomad.reformat <- read_tsv("./input/clinvar.gnomadsv.recessive.supplement.tsv") %>% 
+                                              bind_rows(clinvar.varsum.recessive.gnomad.reformat, .) %>% unique
+
 
 ## this is eveything combined showing frequency by allele
 clinvar.gnomadsv.recessive <- rbind(clinvar.varsum.recessive.gnomad.reformat, 
+                                    csra.gnomad.expLOF[!csra.gnomad.expLOF$CSRA %in% clinvar.varsum.recessive.gnomad.reformat$CSRA,], 
                                               gnomadSV.af.by.region)
+clinvar.gnomadsv.recessive <- clinvar.gnomadsv.recessive[clinvar.gnomadsv.recessive$CSRA!="1_145927328_C_G", ] ## excluding the RBM8A hypomorphic variant. This is not purely a recessive allele. Homozygotes of this allele do not cause disease. 
 
+clinvar.gnomadsv.recessive %>% nrow
 
+write_tsv(clinvar.gnomadsv.recessive, "./output/all.recessive.disease.alleles.tsv")
+write_tsv(clinvar.gnomadsv.recessive %>% group_by(GeneSymbol) %>% summarise(AFsum=sum(AF)) %>% arrange(desc(AFsum)) %>% ungroup, 
+          "./output/all.recessive.gene.carrier.burden.tsv")
 
 ## compare ar gene allele freq with CNV allele freq
 Recurrentdel.highAF <- Recurrentdel %>% filter(seqnames !="X" & freq>0) %>% arrange(desc(freq), desc(freqCMA))
@@ -409,14 +603,47 @@ NAHR.ARgenes <- do.call(c, lapply(1:nrow(Recurrentdel.highAF), function(x){
 ## all alleles for recessive genes within NAHR regions
 clinvar.gnomadsv.recessive.NAHR <- clinvar.gnomadsv.recessive %>%  filter(GeneSymbol %in% NAHR.ARgenes)
 
-metrics.by.population <- function(AFname)
+metrics.by.population <- function(AFname, frac.cutoff=10)
 {
   clinvar.gnomadsv.recessive.pop <- clinvar.gnomadsv.recessive %>% dplyr::select(GeneSymbol, CSRA, AFname)
   names(clinvar.gnomadsv.recessive.pop)[3] <- "AFname1"
-  clinvar.gnomadsv.recessive.by.gene <- clinvar.gnomadsv.recessive.pop %>% group_by(GeneSymbol) %>% summarise(AFsum=sum(AFname1)) %>% arrange(desc(AFsum)) %>% ungroup
   
-  # all NAHR region enclosed genes- total carrier frequency (with NAHR CNV freq included)
-  NAHR.ARgenes.freq <- clinvar.gnomadsv.recessive.by.gene %>% filter(GeneSymbol %in% NAHR.ARgenes)
+  NAHR.ARgenes.freq <- sapply(setdiff(unique(clinvar.gnomadsv.recessive.pop$GeneSymbol), c("NPHP1", NA)), function(x)
+  {
+    fqs <- rev(clinvar.gnomadsv.recessive.pop$AFname1[clinvar.gnomadsv.recessive.pop$GeneSymbol==x])
+    fqs <- fqs[fqs>0 & !is.na(fqs)]
+    fqs <- c(fqs, rep(sum(fqs)/90, 10)) # assume that the known alleles included in this analysis accounts for 90% of all alleles
+    if(!startsWith(rev(clinvar.gnomadsv.recessive.pop$CSRA[clinvar.gnomadsv.recessive.pop$GeneSymbol==x])[1],"cnv"))
+    {
+      fqs <- c(0, fqs)
+    }
+    if(length(fqs)>1)
+    {
+      rfq<-fqs %*% t(fqs)  # matrix of recessive disease fq pairs of allele prods, with NAHR being the first value
+      pb <- sum(rfq[lower.tri(rfq)]) + sum(diag(rfq))- rfq[1,1]  ## total probability.  Note symmetric matrix. homozygous NAHR cnv need to be excluded except for NPHP1
+      pAandB <- sum(rfq[1,])- rfq[1,1]
+      PAbarB <- pAandB/pb
+      PAbarB
+    }
+  })
+  
+  NAHR.ARgenes.freq <- c(NAHR.ARgenes.freq, sapply("NPHP1", function(x)
+  {
+    if(startsWith(rev(clinvar.gnomadsv.recessive.pop$CSRA[clinvar.gnomadsv.recessive.pop$GeneSymbol==x])[1],"cnv"))
+    {fqs <- rev(clinvar.gnomadsv.recessive.pop$AFname1[clinvar.gnomadsv.recessive.pop$GeneSymbol==x])} else {
+      fqs <- c(0, rev(clinvar.gnomadsv.recessive.pop$AFname1[clinvar.gnomadsv.recessive.pop$GeneSymbol==x]))
+    }
+    fqs <- fqs[fqs>0 & !is.na(fqs)]
+    fqs <- c(fqs, rep(sum(fqs)/90, 10)) # assume that the known alleles included in this analysis accounts for 90% of all alleles
+    rfq<-fqs %*% t(fqs)  # matrix of recessive disease fq pairs of allele prods, with NAHR being the first value
+    pb <- sum(rfq[lower.tri(rfq)]) + sum(diag(rfq))  ## total probability.  Note symmetric matrix. homozygous NAHR cnv need to be excluded except for NPHP1
+    pAandB <- sum(rfq[1,])
+    PAbarB <- pAandB/pb
+    PAbarB
+  }))
+  
+  NAHR.ARgenes.freq.cutoff <-   sort(NAHR.ARgenes.freq[NAHR.ARgenes.freq > frac.cutoff/100], decreasing = T)
+  df.NAHR.ARgenes.freq.cutoff <- data.frame(GeneSymbol = names(NAHR.ARgenes.freq.cutoff), fracNAHR = as.numeric(NAHR.ARgenes.freq.cutoff)) 
   #  all NAHR region enclosed genes- carrier freq from NAHR CNVs only
   cnv.recessive.by.gene <- do.call(rbind, lapply(1:nrow(Recurrentdel.highAF), function(x){
     genenames.inCNV <- strsplit(Recurrentdel.highAF$biallelic[x], ",")[[1]]
@@ -426,13 +653,15 @@ metrics.by.population <- function(AFname)
     }
   })) 
   
-  pct.change.NAHR.ARgenes <- left_join(NAHR.ARgenes.freq, cnv.recessive.by.gene) %>% mutate(percentNAHR= AFnahr/AFsum)
+  clinvar.gnomadsv.recessive.by.gene <- clinvar.gnomadsv.recessive.pop %>% group_by(GeneSymbol) %>% summarise(AFsum=sum(AFname1)) %>% arrange(desc(AFsum)) %>% ungroup
+  
+  pct.change.NAHR.ARgenes <- left_join(df.NAHR.ARgenes.freq.cutoff, cnv.recessive.by.gene) %>%
+                              left_join(., clinvar.gnomadsv.recessive.by.gene)
   
   ## this is percent of ar genes significantly affected by NAHR for carrier frequencies. 
-  percentGenesnahr10 <- length(pct.change.NAHR.ARgenes$percentNAHR[pct.change.NAHR.ARgenes$percentNAHR>0.1])/length(Biallelic.gene.omim.ddd.clingen)
-  print(percentGenesnahr10)
-  genesNAHR10ranked <- pct.change.NAHR.ARgenes[pct.change.NAHR.ARgenes$percentNAHR>0.1,] %>% arrange(desc(percentNAHR)) %>% as.data.frame()
-  write_tsv(genesNAHR10ranked, path = paste0("./output/genesNAHR10ranked_", AFname, "_percGeneis_", round(percentGenesnahr10*100, 2), ".tsv"))
+  percentGenesnahr <-   round(length(NAHR.ARgenes.freq.cutoff)/length(Biallelic.gene.omim.ddd.clingen)*100, 2)
+  print(percentGenesnahr)
+  write_tsv(pct.change.NAHR.ARgenes, path = paste0("./output/genesNAHR", frac.cutoff, "ranked_", AFname, "_percGeneis_", percentGenesnahr, ".tsv"))
 }
 
 metrics.by.population("AF")

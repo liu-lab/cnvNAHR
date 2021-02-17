@@ -101,6 +101,7 @@ Biallelic.DDD <- c("biallelic", "biallelic,monoallelic","biallelic,uncertain")
 MonoAndBi.DDD.gene <-  DDD$hgnc_id %>% unique
 
 Biallelic.DDD.gene <- DDD %>% filter(`allelic requirement` %in% Biallelic.DDD) %>% .$hgnc_id %>% unique
+MonoandBiallelic.clingen.gene <- clingen %>% .$hgnc_id
 
 
 ###### ClinGen #######
@@ -121,9 +122,8 @@ genes.pLI.bm <- getBM(attributes=attributes, filter="ensembl_transcript_id", val
 genes.pLI <- genes.pLI.bm$hgnc_id %>% unique
 
 
-#Biallelic.gene.omim.ddd <- unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene))
-Biallelic.gene.omim.ddd.clingen <- unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene, Biallelic.clingen.gene))
-MonoAndBi.gene.omim.ddd <- unique(c(MonoAndBi.OMIM.gene, MonoAndBi.DDD.gene))
+Biallelic.gene.omim.ddd.clingen <- setdiff(unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene, Biallelic.clingen.gene)), "")
+MonoAndBi.gene.omim.ddd.clingen <- setdiff(unique(c(MonoAndBi.OMIM.gene, MonoAndBi.DDD.gene, MonoandBiallelic.clingen.gene)), "")
 
 hgncid.to.gene.gr <- function(ids)
 {
@@ -143,7 +143,7 @@ gr.genes.pLI90 <- ens.transcript.to.gene.gr(Constraint %>% filter(pLI > 0.9 & pL
 
 
 gr.genes.biallelic <- hgncid.to.gene.gr(Biallelic.gene.omim.ddd.clingen)
-gr.genes.monobiallelic <- hgncid.to.gene.gr(MonoAndBi.gene.omim.ddd)
+gr.genes.monobiallelic <- hgncid.to.gene.gr(MonoAndBi.gene.omim.ddd.clingn)
 gr.genes.pRec.bm <- ens.transcript.to.gene.gr(Constraint %>% filter(pRec > 0.99) %>% .$transcript)
 
 ## prepare segdup file for 17q21.31

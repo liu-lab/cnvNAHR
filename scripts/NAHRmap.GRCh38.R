@@ -107,6 +107,7 @@ clingen <- read_csv("./input/Clingen-Gene-Disease-Summary-2021-01-31.csv", skip 
                 col_names = c("GENE_SYMBOL",	"hgnc_id",	"DISEASE_LABEL",	"DISEASE_MONDO_ID",	"MOI",	"SOP",	"CLASSIFICATION", 
                               "ONLINE_REPORT", "CLASSIFICATION_DATE",	"GCEP"))
 Biallelic.clingen.gene <- clingen %>% filter(clingen$MOI=="AR") %>% .$hgnc_id
+MonoandBiallelic.clingen.gene <- clingen %>% .$hgnc_id
 
 
 ######## pRec, pLI #######
@@ -119,10 +120,10 @@ genes.pLI.bm <- getBM(attributes=attributes, filter="ensembl_transcript_id", val
 genes.pLI <- genes.pLI.bm$hgnc_id %>% unique
 
 #Biallelic.gene.omim.ddd <- unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene))
-Biallelic.gene.omim.ddd.clingen <- unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene, Biallelic.clingen.gene))
-MonoAndBi.gene.omim.ddd <- unique(c(MonoAndBi.OMIM.gene, MonoAndBi.DDD.gene))
+Biallelic.gene.omim.ddd.clingen <- setdiff(unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene, Biallelic.clingen.gene)), "")
+MonoAndBi.gene.omim.ddd.clingen <- setdiff(unique(c(MonoAndBi.OMIM.gene, MonoAndBi.DDD.gene, MonoandBiallelic.clingen.gene)), "")
 write_lines(Biallelic.gene.omim.ddd.clingen, "./output/biallelicgenes.txt")
-write_lines(MonoAndBi.gene.omim.ddd, "./output/biallelicmonoallelicgenes.txt")
+write_lines(MonoAndBi.gene.omim.ddd.clingen, "./output/biallelicmonoallelicgenes.txt")
 
 hgncid.to.gene.gr <- function(ids)
 {
@@ -142,7 +143,7 @@ gr.genes.pLI90 <- ens.transcript.to.gene.gr(Constraint %>% filter(pLI > 0.9 & pL
 
 
 gr.genes.biallelic <- hgncid.to.gene.gr(Biallelic.gene.omim.ddd.clingen)
-gr.genes.monobiallelic <- hgncid.to.gene.gr(MonoAndBi.gene.omim.ddd)
+gr.genes.monobiallelic <- hgncid.to.gene.gr(MonoAndBi.gene.omim.ddd.clingen)
 gr.genes.pRec.bm <- ens.transcript.to.gene.gr(Constraint %>% filter(pRec > 0.99) %>% .$transcript)
 
 ## prepare segdup file for 17q21.31
@@ -490,6 +491,11 @@ num.genes.all.bm <- as.data.frame(overlaps6) %>%
   group_by(queryHits) %>%
   summarise(length(unique(gene)))
 
+num.genes.coding.bm <- as.data.frame(overlaps5) %>% 
+  cbind(gene=elementMetadata(gr.gene.coding)[subjectHits(overlaps5), "hgnc_symbol"]) %>%
+  group_by(queryHits) %>%
+  summarise(length(unique(gene)))
+
 
 CNVmerged.final$biallelic <- ""
 CNVmerged.final$biallelic[idx.all.nahr.recessive$queryHits] <- idx.all.nahr.recessive$genes
@@ -507,6 +513,8 @@ CNVmerged.final$allgenes <- ""
 CNVmerged.final$allgenes[idx.genes.all.bm$queryHits] <- idx.genes.all.bm$genes
 
 CNVmerged.final$numallgenes <- num.genes.all.bm$`length(unique(gene))`
+
+CNVmerged.final$numcodinggenes <- num.genes.coding.bm$`length(unique(gene))`
 
 CNVmerged.bed <- CNVmerged.final[, c("seqnames", "start", "end", "info", "score")]
 NAHR.final.bed <- file("./output/NAHR_GRCh38.bed", open="wt")
