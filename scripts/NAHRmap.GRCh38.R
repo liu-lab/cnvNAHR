@@ -6,15 +6,14 @@ library(ggplot2)
 library(stringr)
 library(biomaRt)
 library(magrittr)
-library(tidyr)
 library(VariantAnnotation)
+library(parallel)
 
 mySession = browserSession("UCSC")
 genome(mySession) <- "hg38"
 
 ensembl <- useEnsembl(biomart="ENSEMBL_MART_ENSEMBL", 
-                      dataset="hsapiens_gene_ensembl",
-                      mirror = "uswest")
+                      dataset="hsapiens_gene_ensembl")
 
 attributes <- c("ensembl_gene_id","chromosome_name","start_position","end_position","hgnc_symbol", "hgnc_id", "ensembl_transcript_id", 
                 "entrezgene_id", "gene_biotype") 
@@ -39,91 +38,26 @@ gr.gene.all <- with(gene.bm.mod, GRanges( seqnames = chromosome_name,  IRanges(s
 gr.gene.grouped <- gr.gene.all %>% splitAsList(gr.gene.all$contig_hgnc) 
 gr.gene.grouped.maxidx <- gr.gene.grouped %>% width %>% which.max
 #save only longest transcript for each gene
-gr.gene.all <- do.call(c, lapply(1:length(gr.gene.grouped.maxidx), function(x)
+gr.gene.all <- do.call(c, mclapply(1:length(gr.gene.grouped.maxidx), function(x)
 {
   gr.gene.grouped[[names(gr.gene.grouped.maxidx[x])]][unname(gr.gene.grouped.maxidx[x])]
-}))
+}, mc.cores = 10))
 
 coding.gene.id <- gene.bm.mod %>% filter(gene_biotype=="protein_coding") %>% .$hgnc_id
 gr.gene.coding <- gr.gene.all[gr.gene.all$hgnc_id %in% coding.gene.id]
 
-
-
-
-# load input data
 Constraint <- read_tsv("./input/gnomad.v2.1.1.lof_metrics.by_gene.txt") # can be downloaded from the gnomAD website
-DDD <- read_csv("./input/DDG2P_5_1_2021.csv.gz") %>% mutate(hgnc_id=paste0("HGNC:", `hgnc id`)) # can be downloaded from the DDD website
-Mim2gene <- read_tsv("./input/mim2gene.txt", skip=4)  # 01/04/2021 version from OMIM
-Genemap2 <- read_tsv("./input/genemap2.txt", skip=3)  # 01/04/2021 version from OMIM
-# extract relevant information from the OMIM genemap2 file
-Genemap2_2 <- Genemap2 %>%
-  mutate(Phenotypes = as.character(Phenotypes)) %>%
-  dplyr::select(`MIM Number`,`Gene Symbols`,`Approved Symbol`, `Entrez Gene ID`, `Ensembl Gene ID`,Phenotypes) %>%
-  filter(Phenotypes!="" & `Entrez Gene ID` !="") %>%
-  mutate(Phenotypes = strsplit(Phenotypes, "; ")) %>%
-  unnest(Phenotypes) %>%
-  mutate(MIM_dz_name = str_extract_all(Phenotypes, '^[^\\{\\[].*(?=\\s\\d{6})') %>% str_c(., sep=";"),
-         MIM_dz_name_ass = str_extract_all(Phenotypes, '(^\\{).*(?=\\s\\d{6})') %>% str_c(., sep=";"),
-         MIM_dz_id =  str_extract_all(Phenotypes, '\\d{6}' ),
-         MIM_dz_anno = str_extract_all(Phenotypes, '\\(\\d{1}\\)')  %>% as.matrix %>% as.character,
-         Inheritance = str_extract_all(Phenotypes, '(?<=\\(\\d{1}\\),).*') %>% as.matrix %>% as.character) %>%
-  filter(MIM_dz_anno=="(3)" & MIM_dz_name != "character(0)")  # exclude [] and {}, only select (3)
-
-Biallelic.OMIM <- c(" Autosomal recessive"," Digenic recessive" ,
-                    " Autosomal recessive, Digenic recessive",
-                    " Autosomal recessive, Digenic dominant",
-                    " Autosomal recessive, Mitochondrial",                       
-                    " Autosomal recessive, ?Autosomal dominant"  ,             
-                    " Autosomal recessive, Multifactorial",    
-                    " Autosomal recessive, Somatic mosaicism",  
-                    " Pseudoautosomal recessive" ,
-                    "Autosomal recessive, Autosomal dominant", 
-                    " Autosomal recessive, Multifactorial, Autosomal dominant",   
-                    " Autosomal recessive, Digenic dominant, Autosomal dominant", 
-                    " Autosomal recessive, Autosomal dominant, Isolated cases" , 
-                    " Autosomal recessive, Autosomal dominant, Somatic mutation")
-
-## convert all gene names to hgnc gene id
-
-Biallelic.OMIM.gene.value <- Genemap2_2 %>% filter(Inheritance %in% Biallelic.OMIM) %>% .$`Entrez Gene ID` %>% unique
-Biallelic.OMIM.gene.bm <- getBM(attributes=attributes, filter="entrezgene_id", values=Biallelic.OMIM.gene.value, mart=ensembl)
-Biallelic.OMIM.gene <- Biallelic.OMIM.gene.bm$hgnc_id %>% unique
-
-MonoAndBi.OMIM.gene.bm <- getBM(attributes=attributes, filter="entrezgene_id", values=unique(Genemap2_2$`Entrez Gene ID`), mart=ensembl)
-MonoAndBi.OMIM.gene  <- MonoAndBi.OMIM.gene.bm$hgnc_id %>% unique
-
-
-###### DDD  #########
-
-Biallelic.DDD <- c("biallelic", "biallelic,monoallelic","biallelic,uncertain")
-
-MonoAndBi.DDD.gene <-  DDD$hgnc_id %>% unique
-
-Biallelic.DDD.gene <- DDD %>% filter(`allelic requirement` %in% Biallelic.DDD) %>% .$hgnc_id %>% unique
-
-###### ClinGen #######
-
-clingen <- read_csv("./input/Clingen-Gene-Disease-Summary-2021-01-31.csv", skip = 6, 
-                col_names = c("GENE_SYMBOL",	"hgnc_id",	"DISEASE_LABEL",	"DISEASE_MONDO_ID",	"MOI",	"SOP",	"CLASSIFICATION", 
-                              "ONLINE_REPORT", "CLASSIFICATION_DATE",	"GCEP"))
-Biallelic.clingen.gene <- clingen %>% filter(clingen$MOI=="AR") %>% .$hgnc_id
-MonoandBiallelic.clingen.gene <- clingen %>% .$hgnc_id
 
 
 ######## pRec, pLI #######
 genes.pRec.value <- Constraint %>% filter(pRec > 0.99) %>% .$transcript
 genes.pRec.bm <- getBM(attributes=attributes, filter="ensembl_transcript_id", values=genes.pRec.value, mart=ensembl)
-genes.pRec <- genes.pRec.bm$hgnc_id %>% unique
 
 genes.pLI.value <- Constraint %>% filter(pLI > 0.99) %>% .$transcript
 genes.pLI.bm <- getBM(attributes=attributes, filter="ensembl_transcript_id", values=genes.pLI.value, mart=ensembl)
 genes.pLI <- genes.pLI.bm$hgnc_id %>% unique
 
-#Biallelic.gene.omim.ddd <- unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene))
-Biallelic.gene.omim.ddd.clingen <- setdiff(unique(c(Biallelic.OMIM.gene, Biallelic.DDD.gene, Biallelic.clingen.gene)), "")
-MonoAndBi.gene.omim.ddd.clingen <- setdiff(unique(c(MonoAndBi.OMIM.gene, MonoAndBi.DDD.gene, MonoandBiallelic.clingen.gene)), "")
-write_lines(Biallelic.gene.omim.ddd.clingen, "./output/biallelicgenes.txt")
-write_lines(MonoAndBi.gene.omim.ddd.clingen, "./output/biallelicmonoallelicgenes.txt")
+
 
 hgncid.to.gene.gr <- function(ids)
 {
@@ -141,27 +75,14 @@ gr.genes.pLI999 <- ens.transcript.to.gene.gr(Constraint %>% filter(pLI > 0.999) 
 gr.genes.pLI99 <- ens.transcript.to.gene.gr(Constraint %>% filter(pLI > 0.99 & pLI <=0.999)  %>% .$transcript)
 gr.genes.pLI90 <- ens.transcript.to.gene.gr(Constraint %>% filter(pLI > 0.9 & pLI <= 0.99) %>% .$transcript)
 
+Biallelic.gene.omim.ddd.clingen <- read_lines("./output/biallelicgenes.txt")
+MonoAndBi.gene.omim.ddd.clingen <- read_lines("./output/biallelicmonoallelicgenes.txt")
 
 gr.genes.biallelic <- hgncid.to.gene.gr(Biallelic.gene.omim.ddd.clingen)
 gr.genes.monobiallelic <- hgncid.to.gene.gr(MonoAndBi.gene.omim.ddd.clingen)
 gr.genes.pRec.bm <- ens.transcript.to.gene.gr(Constraint %>% filter(pRec > 0.99) %>% .$transcript)
 
-## prepare segdup file for 17q21.31
-# cd soft/
-# wget "http://www.littlest.co.uk/software/pub/bioinf/freeold/miropeats_2.02.tgz"
-# wget "http://www.littlest.co.uk/software/pub/bioinf/freeold/icatools_2.5.tgz"
-# gunzip miropeats_2.02.tgz
-# gunzip icatools_2.5.tgz
-# tar -xvf miropeats_2.02.tar
-# tar -xvf icatools_2.5.tar
-# cd icatools_2.5/
-# PATH=$PATH:/home/pengfei/soft/icatools_2.5
-# cd /mnt/pure/rnd/pengfei/NAHR/17q21.31
-# /home/pengfei/soft/miropeats_2.02/miropeats -s 200 -onlyinter -seq /mnt/pure/rnd/pengfei/temp/chr17_GL000258v2_alt_1-1821992.fa -seq /mnt/pure/rnd/pengfei/temp/chr17_45309498-46836265.fa
-# /home/pengfei/soft/miropeats_2.02/miropeats -s 1000 -onlyinter -seq /mnt/pure/rnd/pengfei/temp/chr17_GL000258v2_alt_1-1821992.fa -seq /mnt/pure/rnd/pengfei/temp/chr17_45309498-46836265.fa
-# /home/pengfei/soft/miropeats_2.02/miropeats -s 1000 -onlyintra -seq /mnt/pure/rnd/pengfei/temp/chr17_GL000258v2_alt_1-1821992.fa
-# /home/pengfei/soft/miropeats_2.02/miropeats -s 1000 -onlyinter -seq /mnt/pure/rnd/pengfei/temp/chr17_GL000258v2_alt_450000-80000.fa -seq /mnt/pure/rnd/pengfei/temp/chr17_GL000258v2_alt_1250000-1460000.fa
-
+## segdup file for 17q21.31 prepared separately
 segdup.chr17_GL000258v2_alt <- read.table("./input/chr17_GL000258v2_alt_segdup.txt", stringsAsFactors = F, header = T)
 
 segdup.raw <- rbind(segdup.raw, segdup.chr17_GL000258v2_alt)
@@ -314,7 +235,7 @@ nonoverlaps <- setdiff(1:length(gr.NAHR), unlist(list.overlaps) %>% unique) %>% 
 list.overlaps <- append(list.overlaps, nonoverlaps)
 
 ## merging NAHR CNVs
-gr.CNVmerged <- do.call(c,lapply(1:length(list.overlaps), function(i)  ## for each cluster of CNVs overlapping, do a loop
+gr.CNVmerged <- do.call(c,mclapply(1:length(list.overlaps), function(i)  ## for each cluster of CNVs overlapping, do a loop
 {
   idx.group <- list.overlaps[[i]]
   
@@ -385,7 +306,7 @@ gr.CNVmerged <- do.call(c,lapply(1:length(list.overlaps), function(i)  ## for ea
   }))
   
   gr.CNVmerged.group
-}))
+}, mc.cores = 10))
 
 # CNV does not span centromeres
 if(!identical(queryHits(findOverlaps( gr.CNVmerged, gr.cen.merged)), integer(0)))
