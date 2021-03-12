@@ -1,4 +1,7 @@
-# cnvNAHR
+# Sequencing individual genomes with recurrent deletions reveals allelic architecture and disease loci for autosomal recessive traits
+
+The preprint of the manucript is available at https://doi.org/10.1101/2021.02.16.21251842. 
+
 
 Different sections of the scripts should be run in the following order. 
 
@@ -19,3 +22,9 @@ II. To generate a genome-wide predicted NAHR map and to annotate the map, the fo
   
 III. The following is the main code that produces the major analytical results of the manuscript. 
       ./scripts/carrierBurden.R
+      
+      
+The folder ./input.bigfiles is not included in the current GitHub page due to large file sizes. Files in this folder can be either downloaded from publicly available websites or generated as intermediate files during the analysis as described in the code above. 
+  1. gnomAD vcf files: available for download at https://gnomad.broadinstitute.org/downloads. 
+  2. ClinVar vcf files, variant summary files, and submission summary files at available at https://ftp.ncbi.nlm.nih.gov/pub/clinvar/. The data release of 01/19/2021 is used for the manuscript. 
+  3. annotated vcf files are generated as intermediate files as described in the code above. 
