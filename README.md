@@ -2,6 +2,12 @@
 
 The preprint of the manucript is available at https://doi.org/10.1101/2021.02.16.21251842. 
 
+The work was selected as a platform presentation at the American Socienty of Human Genetics 2021 Annual Meeting. Below is the presentation. 
+
+https://user-images.githubusercontent.com/43894048/138635349-0eeaa189-47bd-4f24-a8bd-1d48d8882238.mp4
+
+A flowchart of the computational modeling processes described in this GitHub page is illustrated below.  
+![flowchart](https://user-images.githubusercontent.com/43894048/138635674-02728f38-348f-4a7c-8e07-419d894e27b4.jpg)
 
 Different sections of the scripts should be run in the following order. 
 
