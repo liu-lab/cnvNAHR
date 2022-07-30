@@ -47,7 +47,7 @@ dz.alleles <- bind_rows(gnomadLoF.genome.table, gnomadSV.genome.table, NAHR.tabl
 biallelic.dz.alleles <- dz.alleles %>% filter(hgnc_id %in% Biallelic.gene.omim.ddd.clingen) %>%
   bind_rows(clinvar.biallelic[!clinvar.biallelic$CSRA %in% .$CSRA, ], .) %>% filter(!is.na(AF))
 
-biallelic.dz.alleles %>% nrow # 85063
+biallelic.dz.alleles %>% nrow # 85068
 
 ## all biallelic disease alleles
 write_tsv(biallelic.dz.alleles, "./output/all.recessive.disease.alleles.tsv")
@@ -267,11 +267,11 @@ allele_architecture <- function(AFname, frac.cutoff=0.20)
   write_tsv(metrics.NAHRgenes, path = paste0("./output/NAHRgenesRanked_", AFname, "_", percentGenesnahr, "_percGenesOver_", frac.cutoff, "_dzContribution.tsv"))
 }
 
-allele_architecture("AF")
-allele_architecture("AFR_AF")
-allele_architecture("AMR_AF")
-allele_architecture("EAS_AF")
-allele_architecture("EUR_AF")
+allele_architecture("AF")     #2.14
+allele_architecture("AFR_AF") #2.33
+allele_architecture("AMR_AF") #2.33
+allele_architecture("EAS_AF") #2.33
+allele_architecture("EUR_AF") #2.18
 
 ## make population comparison plots
 metrics_AF <- read_tsv("./output/NAHRgenesRanked_AF_2.11_percGenesOver_0.2_dzContribution.tsv") %>% 
@@ -325,29 +325,64 @@ calculate_AIRD <- function(gene_name, allele_name, AFname = "AF")
   
 ## delta F508
 calculate_AIRD("CFTR", "7_117559590_ATCT_A")
+#               region NIRD
+# 1 7_117559590_ATCT_A  7.3
+
 calculate_AIRD("CFTR", "7_117559590_ATCT_A", AFname = "AFR_AF")
+#               region NIRD
+# 1 7_117559590_ATCT_A  5.2
+
 ## Tay Sachs AJ 2nd highest mutation c.1421+1G>C
 calculate_AIRD("HEXA", "15_72346234_C_G")
+#           region  NIRD
+# 1 15_72346234_C_G -0.15
+
 ## AJ familial dysautonomia 
 calculate_AIRD("ELP1", "9_108899816_A_G")
+#             region NIRD
+# 1 9_108899816_A_G  6.2
+
 ## AJ Canavan top allele
 calculate_AIRD("ASPA", "17_3499000_A_C")
+#           region NIRD
+# 1 17_3499000_A_C  5.2
+
 ## AJ Fanconi anemia group C top allele
 calculate_AIRD("FANCC", "9_95172033_T_A")
+#            region NIRD
+# 1 9_95172033_T_A  4.6
+
 ## AJ Tay-Sachs top allele
 calculate_AIRD("HEXA", "15_72346579_G_GGATA")
+#                region NIRD
+# 1 15_72346579_G_GGATA  5.5
+
 ## AJ NPC A top allele
 calculate_AIRD("NPC1", "18_23536736_A_G")
+#             region NIRD
+# 1 18_23536736_A_G  4.2
+
 ## AJ Bloom top allele; this is absent in gnomAD
 calculate_AIRD("BLM", "15_90766923_ATCTGA_TAGATTC")
+#                        region NIRD
+# 1 15_90766923_ATCTGA_TAGATTC -100
+
 ## AJ Mucolipidosis IV top allele
 calculate_AIRD("MCOLN1", "19_7526759_A_G")
+#           region NIRD
+# 1 19_7526759_A_G  5.1
 
 calculate_AIRD("SMPD1", "11_6392055_TC_T")
+#            region NIRD
+# 1 11_6392055_TC_T    2
 
 calculate_AIRD("NPHP1", "cnv_2q13_NPHP1")
-calculate_AIRD("SMN1", "SMN1_del")
+#           region NIRD
+# 1 cnv_2q13_NPHP1  7.7
 
+calculate_AIRD("SMN1", "SMN1_del")
+#     region NIRD
+# 1 SMN1_del  7.2
 
 ## analysis for expected ratios of hmz, comhet small variants, comhet CNV + small variant
 ## compare them with meta-analysis observation for patient counts

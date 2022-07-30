@@ -60,12 +60,11 @@ Biallelic.OMIM <- c(" Autosomal recessive"," Digenic recessive" ,
 
 ## convert all gene names to hgnc gene id
 
+hgnc_id_to_entrez <- read_tsv("./input/hgnc_id_to_entrez.tsv", col_names = c("hgnc_id", "entrezgene_id"), skip = 1) # downloaded from https://www.genenames.org/download/custom/
 Biallelic.OMIM.gene.value <- Genemap2_2 %>% filter(Inheritance %in% Biallelic.OMIM) %>% .$`Entrez Gene ID` %>% unique
-Biallelic.OMIM.gene.bm <- getBM(attributes=attributes, filter="entrezgene_id", values=Biallelic.OMIM.gene.value, mart=ensembl)
-Biallelic.OMIM.gene <- Biallelic.OMIM.gene.bm$hgnc_id %>% unique %>% c(., "HGNC:4823", "HGNC:4824") ## HBA1 and HBA2 are not labeled as AR in omim. Adding them back. 
+Biallelic.OMIM.gene <- hgnc_id_to_entrez %>% filter(entrezgene_id %in% Biallelic.OMIM.gene.value) %>% .$hgnc_id %>% c(., "HGNC:4823", "HGNC:4824") ## HBA1 and HBA2 are not labeled as AR in omim. Adding them back. 
 
-MonoAndBi.OMIM.gene.bm <- getBM(attributes=attributes, filter="entrezgene_id", values=unique(Genemap2_2$`Entrez Gene ID`), mart=ensembl)
-MonoAndBi.OMIM.gene  <- MonoAndBi.OMIM.gene.bm$hgnc_id %>% unique
+MonoAndBi.OMIM.gene  <- hgnc_id_to_entrez %>% filter(entrezgene_id %in% Genemap2_2$`Entrez Gene ID`) %>% .$hgnc_id
 
 
 ###### DDD  #########
@@ -126,7 +125,7 @@ NAHR_HGNC_ID <- data.frame(name = gr.Recurrentdel.w.freq$name[queryHits(hits1)],
 hits2 <- findOverlaps(gr.Recurrentdel.w.freqCMA, gr.gene.all)
 NAHR_HGNC_ID_CMA <- data.frame(name = gr.Recurrentdel.w.freqCMA$name[queryHits(hits2)], hgnc_id = gr.gene.all$hgnc_id[subjectHits(hits2)], stringsAsFactors = F)
 
-## top 30 most prevalent recurrent CNVs
+## top 31 most prevalent recurrent CNVs
 NAHR_coding_HGNC_ID <- NAHR_HGNC_ID[NAHR_HGNC_ID$hgnc_id %in% coding_HGNC_ID, ] 
 write_tsv(NAHR_coding_HGNC_ID, "./input/NAHR_coding_HGNC_ID.tsv")
 write_tsv(NAHR_HGNC_ID, "./input/NAHR_HGNC_ID.tsv")
